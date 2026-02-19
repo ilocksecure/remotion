@@ -42,6 +42,19 @@ export const ComponentStyleSchema = z.object({
   fontWeight: z.number().min(100).max(900).optional(),
   textAlign: z.enum(["left", "center", "right"]).optional(),
   color: z.string().optional(),
+  letterSpacing: z.number().optional(),
+  lineHeight: z.number().optional(),
+  gradient: z
+    .object({
+      angle: z.number(),
+      stops: z.array(
+        z.object({
+          color: z.string(),
+          position: z.number().min(0).max(100),
+        })
+      ),
+    })
+    .optional(),
   shadow: z
     .object({
       x: z.number(),
@@ -62,7 +75,11 @@ export interface ComponentSpecInput {
     | "image-placeholder"
     | "button"
     | "card"
-    | "container";
+    | "container"
+    | "avatar"
+    | "badge"
+    | "divider"
+    | "input-field";
   position: { x: number; y: number };
   size: { width: number; height: number };
   rotation?: number;
@@ -84,6 +101,10 @@ export const ComponentSpecSchema: z.ZodType<ComponentSpecInput> = z.lazy(
         "button",
         "card",
         "container",
+        "avatar",
+        "badge",
+        "divider",
+        "input-field",
       ]),
       position: z.object({ x: z.number(), y: z.number() }),
       size: z.object({
@@ -91,7 +112,7 @@ export const ComponentSpecSchema: z.ZodType<ComponentSpecInput> = z.lazy(
         height: z.number().min(1),
       }),
       rotation: z.number().default(0),
-      zIndex: z.number().int().min(0),
+      zIndex: z.number().int().min(0).default(0),
       style: ComponentStyleSchema,
       children: z.lazy(() => z.array(ComponentSpecSchema)).optional(),
       content: z.string().optional(),

@@ -1,8 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateText } from "ai";
 import { google } from "@ai-sdk/google";
+import { jsonrepair } from "jsonrepair";
 import { DesignBriefSchema, LayoutSpecSchema } from "@/app/lib/schemas";
 import { buildDesignPrompt } from "@/app/lib/prompt-builder";
+
+function extractJson(text: string): string {
+  let str = text.trim();
+  // Strip markdown code fences
+  if (str.startsWith("```")) {
+    str = str.replace(/^```(?:json)?\s*\n?/, "").replace(/\n?\s*```$/, "");
+  }
+  return str;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,18 +22,16 @@ export async function POST(req: NextRequest) {
 
     const { text } = await generateText({
       model: google("gemini-2.5-flash"),
-      prompt: prompt + "\n\nRespond with ONLY valid JSON matching the LayoutSpec schema. No markdown, no code fences, no explanation.",
+      prompt:
+        prompt +
+        "\n\nIMPORTANT: Respond with ONLY valid JSON. No markdown fences. No comments. No trailing commas. Ensure all string values are properly escaped. Output must be parseable by JSON.parse().",
     });
 
-    // Extract JSON from response (strip markdown fences if present)
-    let jsonStr = text.trim();
-    if (jsonStr.startsWith("```")) {
-      jsonStr = jsonStr.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
-    }
+    const jsonStr = extractJson(text);
+    const repaired = jsonrepair(jsonStr);
+    const parsed = JSON.parse(repaired);
 
-    const parsed = JSON.parse(jsonStr);
     const layout = LayoutSpecSchema.parse(parsed);
-
     return NextResponse.json(layout);
   } catch (error: unknown) {
     const message =
