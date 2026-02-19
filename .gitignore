@@ -4,6 +4,16 @@ node_modules/
 # Build output
 dist/
 out/
+.next/
+
+# Tool configs
+.agent/
+.agents/
+.claude/
+.playwright-mcp/
+
+# Screenshots
+*.png
 
 # Remotion artifacts
 remotion-render/

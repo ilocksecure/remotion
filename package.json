@@ -1,0 +1,38 @@
+{
+  "name": "design-to-animation",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --webpack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.45",
+    "@ai-sdk/google": "^3.0.29",
+    "@remotion/cli": "^4.0.261",
+    "@remotion/google-fonts": "^4.0.261",
+    "@remotion/transitions": "^4.0.261",
+    "ai": "^6.0.91",
+    "fabric": "^6.9.1",
+    "jspdf": "^4.1.0",
+    "next": "16.1.6",
+    "react": "19.2.3",
+    "react-colorful": "^5.6.1",
+    "react-dom": "19.2.3",
+    "remotion": "^4.0.261",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/fabric": "^5.3.11",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.1.6",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
