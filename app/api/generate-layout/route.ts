@@ -20,12 +20,33 @@ export async function POST(req: NextRequest) {
     const brief = DesignBriefSchema.parse(body);
     const prompt = buildDesignPrompt(brief);
 
-    const { text } = await generateText({
-      model: google("gemini-2.5-flash"),
-      prompt:
-        prompt +
-        "\n\nIMPORTANT: Respond with ONLY valid JSON. No markdown fences. No comments. No trailing commas. Ensure all string values are properly escaped. Output must be parseable by JSON.parse().",
-    });
+    const fullPrompt =
+      prompt +
+      "\n\nIMPORTANT: Respond with ONLY valid JSON. No markdown fences. No comments. No trailing commas. Ensure all string values are properly escaped. Output must be parseable by JSON.parse().";
+
+    const hasImages =
+      brief.referenceImages && brief.referenceImages.length > 0;
+
+    const { text } = hasImages
+      ? await generateText({
+          model: google("gemini-2.5-flash"),
+          messages: [
+            {
+              role: "user",
+              content: [
+                ...brief.referenceImages.map((img) => ({
+                  type: "image" as const,
+                  image: img.base64,
+                })),
+                { type: "text" as const, text: fullPrompt },
+              ],
+            },
+          ],
+        })
+      : await generateText({
+          model: google("gemini-2.5-flash"),
+          prompt: fullPrompt,
+        });
 
     const jsonStr = extractJson(text);
     const repaired = jsonrepair(jsonStr);

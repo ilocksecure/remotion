@@ -20,7 +20,9 @@ This is an AI-powered Design Studio that generates structured UI layouts from na
 ### Data Flow
 
 ```
-User prompt → /api/generate-layout (Gemini 2.5 Flash via Vercel AI SDK)
+User prompt → /api/clarify (Gemini 2.5 Flash — optional clarifying questions)
+           → enriched prompt + reference images
+           → /api/generate-layout (Gemini 2.5 Flash, multimodal when images attached)
            → LLM returns JSON matching LayoutSpec schema
            → processLayout() clamps, grid-snaps, resolves collisions
            → componentToSVG() renders each component as SVG
@@ -36,14 +38,15 @@ User prompt → /api/generate-layout (Gemini 2.5 Flash via Vercel AI SDK)
 
 **Pipeline (Steps 2→3→4):**
 - `app/lib/prompt-builder.ts` — `buildDesignPrompt()` constructs the LLM system prompt with style-specific instructions for 5 presets (minimal, corporate, playful, luxury, tech)
-- `app/api/generate-layout/route.ts` — POST handler: validates brief, calls Gemini, repairs JSON via `jsonrepair`, validates with Zod
+- `app/api/clarify/route.ts` — POST handler: generates 2-3 clarifying questions via Gemini before layout generation
+- `app/api/generate-layout/route.ts` — POST handler: validates brief, calls Gemini (multimodal when images attached), repairs JSON via `jsonrepair`, validates with Zod
 - `app/lib/layout-engine.ts` — `processLayout()`: boundary clamping, 8px grid snap, collision resolution, z-index normalization
 - `app/lib/svg-mapper.ts` — `componentToSVG()`: renders 11 component types to SVG strings with gradient/shadow support
 
 **Editor UI:**
 - `app/editor/page.tsx` — Main editor page, manages all state (layout, palette, style, dimensions)
 - `app/components/CanvasEditor.tsx` — Fabric.js v6 canvas wrapper with zoom/pan, lazy-loads fabric
-- `app/components/ChatPanel.tsx` — Left sidebar: prompt input + message history + ColorPalettePicker
+- `app/components/ChatPanel.tsx` — Left sidebar: auto-growing textarea, image upload, clarifying questions flow, message history + ColorPalettePicker
 - `app/components/LayerPanel.tsx` — Right sidebar: z-index ordered component list
 - `app/components/ToolBar.tsx` — Top bar: style/dimension selectors, export trigger
 - `app/components/ExportDialog.tsx` — Export modal (format + scale selection)
@@ -68,6 +71,7 @@ The `ComponentSpecSchema` supports 11 types: `text`, `shape`, `icon`, `image-pla
 - **The API route uses `jsonrepair`** to fix malformed LLM JSON (trailing commas, unescaped characters, comments) before parsing. Markdown fences are stripped first via `extractJson()`.
 - **Fabric.js v6** uses async patterns: `dispose()` returns a Promise, `loadSVGFromString()` returns a Promise. The canvas lazy-loads the fabric module.
 - **`processLayout()`** always runs after LLM generation — it clamps to canvas bounds, snaps to 8px grid, resolves collisions, and normalizes z-indices.
+- **Multimodal Gemini support:** When reference images are uploaded, `/api/generate-layout` switches from `prompt` to `messages` with `type: "image"` parts. Text-only is used when no images are present for efficiency.
 
 ## Tech Stack
 
@@ -87,3 +91,4 @@ The `ComponentSpecSchema` supports 11 types: `text`, `shape`, `icon`, `image-pla
 - `docs/design-quality-improvements.md` — SVG rendering + prompt quality overhaul
 - `docs/remotion-learnings.md` — Remotion API patterns (spring, interpolate, TransitionSeries)
 - `docs/gemini-api-reference.md` — Gemini API endpoints for image gen and TTS
+- `docs/enhanced-chat-panel-implementation.md` — ChatPanel UX upgrade: textarea, image upload, AI clarifying questions

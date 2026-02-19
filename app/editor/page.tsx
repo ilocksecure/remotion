@@ -4,6 +4,7 @@ import { useState, useRef } from "react";
 import type { Canvas } from "fabric";
 import CanvasEditor from "@/app/components/CanvasEditor";
 import ChatPanel from "@/app/components/ChatPanel";
+import type { ClarifyQuestion } from "@/app/components/ChatPanel";
 import LayerPanel from "@/app/components/LayerPanel";
 import ToolBar from "@/app/components/ToolBar";
 import ExportDialog from "@/app/components/ExportDialog";
@@ -39,7 +40,10 @@ export default function EditorPage() {
   const [exportOpen, setExportOpen] = useState(false);
   const fabricCanvasRef = useRef<Canvas | null>(null);
 
-  async function handleGenerate(prompt: string) {
+  async function handleGenerate(
+    prompt: string,
+    images: { url: string; base64: string }[]
+  ) {
     setLoading(true);
     setError(null);
 
@@ -47,7 +51,7 @@ export default function EditorPage() {
       const brief: DesignBrief = {
         description: prompt,
         palette,
-        referenceImages: [],
+        referenceImages: images,
         style,
         dimensions: { width: dimensions.width, height: dimensions.height },
         targetFormat: "web",
@@ -75,6 +79,23 @@ export default function EditorPage() {
     }
   }
 
+  async function handleClarify(prompt: string): Promise<ClarifyQuestion[]> {
+    try {
+      const res = await fetch("/api/clarify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description: prompt, style }),
+      });
+
+      if (!res.ok) return [];
+
+      const data = await res.json();
+      return Array.isArray(data.questions) ? data.questions : [];
+    } catch {
+      return [];
+    }
+  }
+
   return (
     <div className="h-screen flex flex-col bg-zinc-900 text-white">
       <ToolBar
@@ -89,9 +110,10 @@ export default function EditorPage() {
 
       <div className="flex flex-1 min-h-0">
         {/* Left — Chat Panel */}
-        <div className="w-[280px] border-r border-zinc-700 flex-shrink-0">
+        <div className="w-[340px] border-r border-zinc-700 flex-shrink-0">
           <ChatPanel
             onGenerate={handleGenerate}
+            onClarify={handleClarify}
             loading={loading}
             error={error}
             palette={palette}

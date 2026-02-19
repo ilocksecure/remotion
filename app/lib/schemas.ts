@@ -16,7 +16,7 @@ export const DesignBriefSchema = z.object({
   referenceImages: z
     .array(
       z.object({
-        url: z.string().url(),
+        url: z.string(),
         base64: z.string(),
       })
     )

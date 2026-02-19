@@ -115,7 +115,14 @@ Component composition best practices:
 
 Style-specific instructions:
 ${getStyleInstructions(brief.style)}
-
+${brief.referenceImages && brief.referenceImages.length > 0 ? `
+Reference images are attached. Analyze them for:
+- Layout structure and composition patterns
+- Color usage and visual style
+- Component types and hierarchy
+- Spacing and typography patterns
+Use these as inspiration for the generated layout.
+` : ""}
 Create a polished, visually rich, professional layout. Use shadows, gradients, and proper spacing to create depth and hierarchy. The output should look like a real product design, not a wireframe.`;
 }
 
