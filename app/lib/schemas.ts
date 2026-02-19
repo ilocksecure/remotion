@@ -63,6 +63,17 @@ export const ComponentStyleSchema = z.object({
       color: z.string(),
     })
     .optional(),
+  shadows: z
+    .array(
+      z.object({
+        x: z.number(),
+        y: z.number(),
+        blur: z.number().min(0),
+        color: z.string(),
+      })
+    )
+    .optional(),
+  textTransform: z.enum(["uppercase", "lowercase", "capitalize", "none"]).optional(),
 });
 
 // ─── Component Spec (recursive for children) ─────────────────────
@@ -113,7 +124,7 @@ export const ComponentSpecSchema: z.ZodType<ComponentSpecInput> = z.lazy(
       }),
       rotation: z.number().default(0),
       zIndex: z.number().int().min(0).default(0),
-      style: ComponentStyleSchema,
+      style: ComponentStyleSchema.default({}),
       children: z.lazy(() => z.array(ComponentSpecSchema)).optional(),
       content: z.string().optional(),
     })
@@ -190,3 +201,17 @@ export const EditInstructionSchema = z.object({
     ])
   ),
 });
+
+// ─── Edit Response (discriminated union: diff edit vs full regenerate) ────
+export const EditResponseSchema = z.discriminatedUnion("mode", [
+  z.object({
+    mode: z.literal("edit"),
+    reasoning: z.string(),
+    operations: EditInstructionSchema.shape.operations,
+  }),
+  z.object({
+    mode: z.literal("regenerate"),
+    reasoning: z.string(),
+    layout: LayoutSpecSchema,
+  }),
+]);

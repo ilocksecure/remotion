@@ -9,6 +9,7 @@ import {
   LayoutSpecSchema,
   EditInstructionSchema,
   ComponentChangesSchema,
+  EditResponseSchema,
 } from "./schemas";
 
 export type Palette = z.infer<typeof PaletteSchema>;
@@ -20,3 +21,4 @@ export type LayerSpec = z.infer<typeof LayerSpecSchema>;
 export type LayoutSpec = z.infer<typeof LayoutSpecSchema>;
 export type EditInstruction = z.infer<typeof EditInstructionSchema>;
 export type ComponentChanges = z.infer<typeof ComponentChangesSchema>;
+export type EditResponse = z.infer<typeof EditResponseSchema>;

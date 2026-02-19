@@ -8,8 +8,9 @@ import type { ClarifyQuestion } from "@/app/components/ChatPanel";
 import LayerPanel from "@/app/components/LayerPanel";
 import ToolBar from "@/app/components/ToolBar";
 import ExportDialog from "@/app/components/ExportDialog";
-import type { LayoutSpec, DesignBrief } from "@/app/lib/types";
+import type { LayoutSpec, DesignBrief, EditResponse } from "@/app/lib/types";
 import { processLayout } from "@/app/lib/layout-engine";
+import { applyEdits } from "@/app/lib/apply-edits";
 
 type StylePreset = DesignBrief["style"];
 type DimensionPreset = { label: string; width: number; height: number };
@@ -96,6 +97,48 @@ export default function EditorPage() {
     }
   }
 
+  async function handleEdit(editPrompt: string): Promise<string> {
+    if (!layout) throw new Error("No layout to edit");
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/edit-layout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentLayout: layout,
+          editPrompt,
+          style,
+          palette,
+          dimensions: { width: dimensions.width, height: dimensions.height },
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Edit failed");
+      }
+
+      const editResponse: EditResponse = await res.json();
+
+      if (editResponse.mode === "edit") {
+        const edited = applyEdits(layout, editResponse.operations);
+        setLayout(processLayout(edited));
+      } else {
+        setLayout(processLayout(editResponse.layout));
+      }
+
+      return editResponse.reasoning;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setError(message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div className="h-screen flex flex-col bg-zinc-900 text-white">
       <ToolBar
@@ -114,6 +157,8 @@ export default function EditorPage() {
           <ChatPanel
             onGenerate={handleGenerate}
             onClarify={handleClarify}
+            onEdit={handleEdit}
+            hasLayout={!!layout}
             loading={loading}
             error={error}
             palette={palette}

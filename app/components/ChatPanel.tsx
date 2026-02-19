@@ -23,6 +23,8 @@ export interface ClarifyQuestion {
 interface ChatPanelProps {
   onGenerate: (prompt: string, images: { url: string; base64: string }[]) => void;
   onClarify: (prompt: string) => Promise<ClarifyQuestion[]>;
+  onEdit?: (editPrompt: string) => Promise<string>;
+  hasLayout?: boolean;
   loading: boolean;
   error: string | null;
   palette: Palette;
@@ -35,6 +37,8 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 export default function ChatPanel({
   onGenerate,
   onClarify,
+  onEdit,
+  hasLayout,
   loading,
   error,
   palette,
@@ -48,6 +52,7 @@ export default function ChatPanel({
   const [clarifyAnswers, setClarifyAnswers] = useState<Record<number, string>>({});
   const [pendingPrompt, setPendingPrompt] = useState("");
   const [clarifyLoading, setClarifyLoading] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -124,6 +129,20 @@ export default function ChatPanel({
     setMessages((prev) => [...prev, { role: "user", text: prompt }]);
     setPendingPrompt(prompt);
     setInput("");
+
+    // If we have a layout and an edit handler, use edit mode (skip clarification)
+    if (hasLayout && onEdit) {
+      try {
+        const reasoning = await onEdit(prompt);
+        setMessages((prev) => [
+          ...prev,
+          { role: "system", text: reasoning },
+        ]);
+      } catch {
+        // error is handled by parent via setError
+      }
+      return;
+    }
 
     // Try clarification first
     setClarifyLoading(true);
@@ -218,16 +237,35 @@ export default function ChatPanel({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-3 py-2 border-b border-zinc-700">
+      <div className="px-3 py-2 border-b border-zinc-700 flex items-center gap-2">
         <p className="font-medium text-zinc-300 text-sm">Chat</p>
+        {hasLayout && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-900/50 text-emerald-400 border border-emerald-800/50">
+            Edit mode
+          </span>
+        )}
       </div>
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
         {messages.length === 0 && (
-          <p className="text-xs text-zinc-500">
-            Describe a UI design to generate it on the canvas.
-          </p>
+          <div className="space-y-2">
+            <p className="text-xs text-zinc-500">
+              Describe a UI design to generate it on the canvas.
+            </p>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] text-zinc-600">Try:</span>
+              {["SaaS dashboard", "Landing page", "Mobile app", "E-commerce store"].map((chip) => (
+                <button
+                  key={chip}
+                  onClick={() => setInput(chip)}
+                  className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700 hover:bg-zinc-700 hover:text-zinc-200 transition-colors cursor-pointer"
+                >
+                  {chip}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
         {messages.map((msg, i) => (
           <div
@@ -292,9 +330,27 @@ export default function ChatPanel({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Color Palette */}
-      <div className="px-3 py-2 border-t border-zinc-700">
-        <ColorPalettePicker palette={palette} onChange={onPaletteChange} />
+      {/* Color Palette (collapsible) */}
+      <div className="border-t border-zinc-700">
+        <button
+          onClick={() => setPaletteOpen((o) => !o)}
+          className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-zinc-800/50 transition-colors cursor-pointer"
+        >
+          <span className="text-xs font-medium text-zinc-400">Palette</span>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 16 16"
+            fill="currentColor"
+            className={`w-3.5 h-3.5 text-zinc-500 transition-transform ${paletteOpen ? "rotate-180" : ""}`}
+          >
+            <path fillRule="evenodd" d="M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
+          </svg>
+        </button>
+        {paletteOpen && (
+          <div className="px-3 pb-2">
+            <ColorPalettePicker palette={palette} onChange={onPaletteChange} />
+          </div>
+        )}
       </div>
 
       {/* Image Upload Drop Zone */}
@@ -305,6 +361,10 @@ export default function ChatPanel({
           onClick={() => fileInputRef.current?.click()}
           className="border border-dashed border-zinc-600 rounded p-2 text-center cursor-pointer hover:border-zinc-400 transition-colors"
         >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-zinc-500 mx-auto mb-1">
+            <path d="M9.25 13.25a.75.75 0 0 0 1.5 0V4.636l2.955 3.129a.75.75 0 0 0 1.09-1.03l-4.25-4.5a.75.75 0 0 0-1.09 0l-4.25 4.5a.75.75 0 1 0 1.09 1.03L9.25 4.636v8.614Z" />
+            <path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z" />
+          </svg>
           <p className="text-xs text-zinc-500">
             {images.length >= MAX_IMAGES
               ? "Max 5 images"
@@ -352,18 +412,19 @@ export default function ChatPanel({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Describe a design..."
+          placeholder={hasLayout ? "Describe an edit..." : "Describe a design..."}
           disabled={loading || clarifyLoading || phase === "clarifying"}
           rows={3}
           className="w-full bg-zinc-800 text-white text-sm px-3 py-2 rounded border border-zinc-600 placeholder-zinc-500 disabled:opacity-50 resize-none overflow-y-auto"
           style={{ minHeight: 72, maxHeight: 144 }}
         />
+        <p className="text-[10px] text-zinc-500">Shift+Enter for new line</p>
         <button
           type="submit"
           disabled={loading || clarifyLoading || !input.trim() || phase === "clarifying"}
           className="w-full px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {loading ? "Generating..." : clarifyLoading ? "Thinking..." : "Go"}
+          {loading ? "Generating..." : clarifyLoading ? "Thinking..." : hasLayout ? "Edit" : "Go"}
         </button>
       </form>
     </div>

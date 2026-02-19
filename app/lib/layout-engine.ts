@@ -1,6 +1,6 @@
 import type { ComponentSpec, LayoutSpec } from "./types";
 
-const GRID = 8;
+const GRID = 4;
 
 export function processLayout(raw: LayoutSpec): LayoutSpec {
   let layout = structuredClone(raw);
@@ -20,28 +20,36 @@ export function processLayout(raw: LayoutSpec): LayoutSpec {
     },
   }));
 
-  // 2. Grid snap (8px grid for clean alignment)
+  // 2. Grid snap — positions only (preserve LLM's precise sizing)
   layout.components = layout.components.map((comp) => ({
     ...comp,
     position: {
       x: Math.round(comp.position.x / GRID) * GRID,
       y: Math.round(comp.position.y / GRID) * GRID,
     },
-    size: {
-      width: Math.max(GRID, Math.round(comp.size.width / GRID) * GRID),
-      height: Math.max(GRID, Math.round(comp.size.height / GRID) * GRID),
-    },
   }));
 
-  // 3. Collision resolution — nudge overlapping siblings
+  // 3. Collision resolution — only nudge when overlap exceeds 25% of smaller component
   layout.components = resolveCollisions(layout.components);
 
-  // 4. Z-index normalization — ensure sequential, no gaps
-  layout.components = layout.components
-    .sort((a, b) => a.zIndex - b.zIndex)
-    .map((comp, i) => ({ ...comp, zIndex: i }));
+  // 4. Z-index sort — preserve intentional layering gaps (no normalization)
+  layout.components = layout.components.sort((a, b) => a.zIndex - b.zIndex);
 
   return layout;
+}
+
+function overlapArea(a: ComponentSpec, b: ComponentSpec): number {
+  const ox = Math.max(
+    0,
+    Math.min(a.position.x + a.size.width, b.position.x + b.size.width) -
+      Math.max(a.position.x, b.position.x)
+  );
+  const oy = Math.max(
+    0,
+    Math.min(a.position.y + a.size.height, b.position.y + b.size.height) -
+      Math.max(a.position.y, b.position.y)
+  );
+  return ox * oy;
 }
 
 function resolveCollisions(components: ComponentSpec[]): ComponentSpec[] {
@@ -53,6 +61,14 @@ function resolveCollisions(components: ComponentSpec[]): ComponentSpec[] {
       if (a.zIndex !== b.zIndex) continue;
 
       if (intersects(a, b)) {
+        const overlap = overlapArea(a, b);
+        const smallerArea = Math.min(
+          a.size.width * a.size.height,
+          b.size.width * b.size.height
+        );
+        // Only nudge when overlap > 25% of the smaller component
+        if (overlap / smallerArea <= 0.25) continue;
+
         const overlapY = a.position.y + a.size.height - b.position.y;
         if (overlapY > 0) {
           result[j] = {

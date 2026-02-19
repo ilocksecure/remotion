@@ -142,6 +142,8 @@ export default function CanvasEditor({
   // Space + drag = pan
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) return;
       if (e.code === "Space" && !e.repeat) {
         e.preventDefault();
         setIsPanning(true);

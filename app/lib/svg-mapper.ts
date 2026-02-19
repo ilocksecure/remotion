@@ -52,10 +52,61 @@ function buildShadowFilter(
   return { def, attr: `filter="url(#${id})"` };
 }
 
+function buildMultiShadowFilter(
+  shadows: { x: number; y: number; blur: number; color: string }[],
+  id: string
+): { def: string; attr: string } {
+  const drops = shadows
+    .map(
+      (sh) =>
+        `<feDropShadow dx="${sh.x}" dy="${sh.y}" stdDeviation="${sh.blur / 2}" flood-color="${sh.color}" flood-opacity="1" />`
+    )
+    .join("");
+  const def = `<filter id="${id}" x="-20%" y="-20%" width="140%" height="140%">${drops}</filter>`;
+  return { def, attr: `filter="url(#${id})"` };
+}
+
+function resolveShadow(
+  s: ComponentSpec["style"],
+  defs: string[],
+  prefix: string
+): string {
+  const id = `${prefix}-shadow-${++gradientCounter}`;
+  if (s.shadows && s.shadows.length > 0) {
+    const sf = buildMultiShadowFilter(s.shadows, id);
+    defs.push(sf.def);
+    return ` ${sf.attr}`;
+  }
+  if (s.shadow) {
+    const sf = buildShadowFilter(s.shadow, id);
+    defs.push(sf.def);
+    return ` ${sf.attr}`;
+  }
+  return "";
+}
+
+function applyTextTransform(
+  text: string,
+  transform: string | undefined
+): string {
+  if (!transform || transform === "none") return text;
+  switch (transform) {
+    case "uppercase":
+      return text.toUpperCase();
+    case "lowercase":
+      return text.toLowerCase();
+    case "capitalize":
+      return text.replace(/\b\w/g, (c) => c.toUpperCase());
+    default:
+      return text;
+  }
+}
+
 export function componentToSVG(spec: ComponentSpec): string {
   const { width: w, height: h } = spec.size;
   const s = spec.style;
-  const content = spec.content ? escapeXml(spec.content) : "";
+  const rawContent = spec.content ? escapeXml(spec.content) : "";
+  const content = applyTextTransform(rawContent, s.textTransform);
 
   switch (spec.type) {
     case "text": {
@@ -75,11 +126,15 @@ export function componentToSVG(spec: ComponentSpec): string {
         s.opacity !== undefined && s.opacity !== 1
           ? ` opacity="${s.opacity}"`
           : "";
+      const shadowAttr = resolveShadow(s, defs, "txt");
+      const defsBlock =
+        defs.length > 0 ? `<defs>${defs.join("")}</defs>` : "";
       return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
+        ${defsBlock}
         <text x="${tx}" y="${h / 2}"
           font-family="${s.fontFamily || "Inter, system-ui, sans-serif"}" font-size="${s.fontSize || 16}"
           font-weight="${s.fontWeight || 400}"
-          fill="${s.color || "#000"}" text-anchor="${anchor}" dominant-baseline="middle"${letterSpacingAttr}${opacityAttr}
+          fill="${s.color || "#000"}" text-anchor="${anchor}" dominant-baseline="middle"${letterSpacingAttr}${opacityAttr}${shadowAttr}
         >${content}</text>
       </svg>`;
     }
@@ -87,15 +142,9 @@ export function componentToSVG(spec: ComponentSpec): string {
     case "button": {
       const defs: string[] = [];
       const fill = resolveFill(s, "#3B82F6", defs);
-      const filterId = `btn-shadow-${++gradientCounter}`;
-      let shadowAttr = "";
-      if (s.shadow) {
-        const sf = buildShadowFilter(s.shadow, filterId);
-        defs.push(sf.def);
-        shadowAttr = ` ${sf.attr}`;
-      }
+      const shadowAttr = resolveShadow(s, defs, "btn");
       // Subtle inner highlight
-      const highlightId = `btn-hl-${gradientCounter}`;
+      const highlightId = `btn-hl-${++gradientCounter}`;
       defs.push(
         `<linearGradient id="${highlightId}" x1="50%" y1="0%" x2="50%" y2="100%"><stop offset="0%" stop-color="rgba(255,255,255,0.15)" /><stop offset="100%" stop-color="rgba(0,0,0,0)" /></linearGradient>`
       );
@@ -118,6 +167,7 @@ export function componentToSVG(spec: ComponentSpec): string {
     case "shape": {
       const defs: string[] = [];
       const fill = resolveFill(s, "#ccc", defs);
+      const shadowAttr = resolveShadow(s, defs, "shape");
       const defsBlock =
         defs.length > 0 ? `<defs>${defs.join("")}</defs>` : "";
       return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
@@ -125,17 +175,30 @@ export function componentToSVG(spec: ComponentSpec): string {
         <rect width="${w}" height="${h}"
           rx="${s.borderRadius || 0}" fill="${fill}"
           stroke="${s.stroke || "none"}" stroke-width="${s.strokeWidth || 0}"
-          opacity="${s.opacity ?? 1}" />
+          opacity="${s.opacity ?? 1}"${shadowAttr} />
       </svg>`;
     }
 
     case "card": {
       const defs: string[] = [];
       const fill = resolveFill(s, "#fff", defs);
-      const shadow = s.shadow || { x: 0, y: 4, blur: 12, color: "rgba(0,0,0,0.1)" };
-      const filterId = `card-shadow-${++gradientCounter}`;
-      const sf = buildShadowFilter(shadow, filterId);
-      defs.push(sf.def);
+      // Use multi-shadow if available, fallback to single shadow, then default 2-layer shadow
+      let shadowAttr: string;
+      if (s.shadows && s.shadows.length > 0) {
+        shadowAttr = resolveShadow(s, defs, "card");
+      } else if (s.shadow) {
+        shadowAttr = resolveShadow(s, defs, "card");
+      } else {
+        // Default 2-layer shadow for cards when none specified
+        const defaultShadows = [
+          { x: 0, y: 1, blur: 3, color: "rgba(0,0,0,0.08)" },
+          { x: 0, y: 4, blur: 16, color: "rgba(0,0,0,0.06)" },
+        ];
+        const id = `card-shadow-${++gradientCounter}`;
+        const sf = buildMultiShadowFilter(defaultShadows, id);
+        defs.push(sf.def);
+        shadowAttr = ` ${sf.attr}`;
+      }
       const radius = s.borderRadius ?? 8;
       const borderStroke = s.stroke || "rgba(0,0,0,0.06)";
       const defsBlock = `<defs>${defs.join("")}</defs>`;
@@ -149,7 +212,7 @@ export function componentToSVG(spec: ComponentSpec): string {
       return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
         ${defsBlock}
         <rect width="${w}" height="${h}" rx="${radius}"
-          fill="${fill}" ${sf.attr}
+          fill="${fill}"${shadowAttr}
           stroke="${borderStroke}" stroke-width="${s.strokeWidth ?? 1}" />
         ${childSVGs}
       </svg>`;
@@ -251,12 +314,13 @@ export function componentToSVG(spec: ComponentSpec): string {
       const r = Math.min(w, h) / 2;
       const cx = w / 2;
       const cy = h / 2;
-      // Extract initials from content (e.g. "John Doe" → "JD")
-      const initials = (spec.content || "?")
+      // Extract initials from content (e.g. "John Doe" -> "JD")
+      const rawInitials = (spec.content || "?")
         .split(/\s+/)
         .map((word) => word.charAt(0).toUpperCase())
         .slice(0, 2)
         .join("");
+      const initials = applyTextTransform(rawInitials, s.textTransform);
       const fontSize = s.fontSize || Math.round(r * 0.8);
       return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
         ${defsBlock}
@@ -272,18 +336,23 @@ export function componentToSVG(spec: ComponentSpec): string {
     case "badge": {
       const defs: string[] = [];
       const fill = resolveFill(s, "#10B981", defs);
+      const shadowAttr = resolveShadow(s, defs, "badge");
       const defsBlock =
         defs.length > 0 ? `<defs>${defs.join("")}</defs>` : "";
       const radius = s.borderRadius ?? Math.min(h / 2, 12);
+      // Default textTransform to uppercase for badges
+      const badgeContent = s.textTransform
+        ? content
+        : applyTextTransform(rawContent, "uppercase");
       return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
         ${defsBlock}
-        <rect width="${w}" height="${h}" rx="${radius}" fill="${fill}" />
-        ${content ? `<text x="${w / 2}" y="${h / 2}"
+        <rect width="${w}" height="${h}" rx="${radius}" fill="${fill}"${shadowAttr} />
+        ${badgeContent ? `<text x="${w / 2}" y="${h / 2}"
           font-family="${s.fontFamily || "Inter, system-ui, sans-serif"}" font-size="${s.fontSize || 11}"
           font-weight="${s.fontWeight || 600}"
           fill="${s.color || "#fff"}" text-anchor="middle" dominant-baseline="central"
           letter-spacing="${s.letterSpacing ?? 0.5}"
-        >${content}</text>` : ""}
+        >${badgeContent}</text>` : ""}
       </svg>`;
     }
 

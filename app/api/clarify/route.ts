@@ -15,6 +15,7 @@ interface ClarifyResponse {
 export async function POST(req: NextRequest) {
   try {
     const { description, style, industry } = await req.json();
+    console.log("[clarify] prompt:", description);
 
     if (!description || typeof description !== "string") {
       return NextResponse.json(
