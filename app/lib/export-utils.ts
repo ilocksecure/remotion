@@ -1,27 +1,30 @@
-import type { Canvas } from "fabric";
+import { toPng, toJpeg } from "html-to-image";
 
 export async function exportDesign(
-  canvas: Canvas,
+  element: HTMLElement,
   format: "png" | "jpg" | "pdf",
   scale: number = 2
 ): Promise<Blob> {
-  if (format === "png" || format === "jpg") {
-    const dataUrl = canvas.toDataURL({
-      format: format === "jpg" ? "jpeg" : "png",
-      quality: format === "jpg" ? 0.92 : 1,
-      multiplier: scale,
-    });
+  const options = {
+    pixelRatio: scale,
+    cacheBust: true,
+  };
+
+  if (format === "png") {
+    const dataUrl = await toPng(element, options);
     return dataURLToBlob(dataUrl);
   }
 
-  // PDF: raster approach
+  if (format === "jpg") {
+    const dataUrl = await toJpeg(element, { ...options, quality: 0.92 });
+    return dataURLToBlob(dataUrl);
+  }
+
+  // PDF: raster approach — render to PNG then embed in PDF
   const { jsPDF } = await import("jspdf");
-  const dataUrl = canvas.toDataURL({
-    format: "png",
-    multiplier: scale,
-  });
-  const w = (canvas.width ?? 1440) * scale;
-  const h = (canvas.height ?? 900) * scale;
+  const dataUrl = await toPng(element, options);
+  const w = element.offsetWidth * scale;
+  const h = element.offsetHeight * scale;
   const pdf = new jsPDF({
     orientation: w > h ? "landscape" : "portrait",
     unit: "px",

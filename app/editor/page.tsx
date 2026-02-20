@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useRef } from "react";
-import type { Canvas } from "fabric";
-import CanvasEditor from "@/app/components/CanvasEditor";
+import { useState, useRef, useCallback } from "react";
+import LayoutPreview from "@/app/components/LayoutPreview";
+import type { LayoutPreviewHandle } from "@/app/components/LayoutPreview";
 import ChatPanel from "@/app/components/ChatPanel";
 import type { ClarifyQuestion } from "@/app/components/ChatPanel";
-import LayerPanel from "@/app/components/LayerPanel";
 import ToolBar from "@/app/components/ToolBar";
 import ExportDialog from "@/app/components/ExportDialog";
 import type { LayoutSpec, DesignBrief, EditResponse, GenerationMode } from "@/app/lib/types";
@@ -40,7 +39,7 @@ export default function EditorPage() {
   const [error, setError] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [generationMode, setGenerationMode] = useState<GenerationMode>("text-first");
-  const fabricCanvasRef = useRef<Canvas | null>(null);
+  const previewRef = useRef<LayoutPreviewHandle>(null);
 
   async function handleGenerate(
     prompt: string,
@@ -145,6 +144,10 @@ export default function EditorPage() {
     }
   }
 
+  const getExportElement = useCallback(() => {
+    return previewRef.current?.getElement() ?? null;
+  }, []);
+
   return (
     <div className="h-screen flex flex-col bg-zinc-900 text-white">
       <ToolBar
@@ -175,27 +178,16 @@ export default function EditorPage() {
           />
         </div>
 
-        {/* Center — Canvas */}
+        {/* Center — React Preview */}
         <div className="flex-1 min-w-0">
-          <CanvasEditor
-            layout={layout}
-            onLayoutChange={setLayout}
-            onCanvasReady={(c) => {
-              fabricCanvasRef.current = c;
-            }}
-          />
-        </div>
-
-        {/* Right — Layer Panel */}
-        <div className="w-[240px] border-l border-zinc-700 flex-shrink-0">
-          <LayerPanel layout={layout} />
+          <LayoutPreview ref={previewRef} layout={layout} />
         </div>
       </div>
 
       <ExportDialog
         open={exportOpen}
         onClose={() => setExportOpen(false)}
-        canvas={fabricCanvasRef.current}
+        getElement={getExportElement}
       />
     </div>
   );

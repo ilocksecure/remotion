@@ -1,13 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import type { Canvas } from "fabric";
 import { exportDesign, downloadBlob } from "@/app/lib/export-utils";
 
 interface ExportDialogProps {
   open: boolean;
   onClose: () => void;
-  canvas: Canvas | null;
+  getElement: () => HTMLElement | null;
 }
 
 type ExportFormat = "png" | "jpg" | "pdf";
@@ -16,7 +15,7 @@ type ExportScale = 1 | 2 | 3;
 export default function ExportDialog({
   open,
   onClose,
-  canvas,
+  getElement,
 }: ExportDialogProps) {
   const [format, setFormat] = useState<ExportFormat>("png");
   const [scale, setScale] = useState<ExportScale>(2);
@@ -25,10 +24,11 @@ export default function ExportDialog({
   if (!open) return null;
 
   async function handleExport() {
-    if (!canvas) return;
+    const element = getElement();
+    if (!element) return;
     setExporting(true);
     try {
-      const blob = await exportDesign(canvas, format, scale);
+      const blob = await exportDesign(element, format, scale);
       const timestamp = Date.now();
       downloadBlob(blob, `design-${timestamp}.${format}`);
       onClose();
@@ -92,7 +92,7 @@ export default function ExportDialog({
           </button>
           <button
             onClick={handleExport}
-            disabled={exporting || !canvas}
+            disabled={exporting}
             className="flex-1 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded disabled:opacity-50"
           >
             {exporting ? "Exporting..." : "Download"}

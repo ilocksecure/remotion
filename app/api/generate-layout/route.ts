@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     // Stage 1: Generate detailed design spec (text-only, always)
     const designSpecPrompt = buildDesignSpecPrompt(brief);
     const { text: designSpec } = await generateText({
-      model: google("gemini-2.5-flash"),
+      model: google("gemini-3-flash-preview"),
       prompt: designSpecPrompt,
     });
     console.log("[generate-layout] Stage 1 design spec:", designSpec.slice(0, 500));
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
 
     const { text } = hasImages
       ? await generateText({
-          model: google("gemini-2.5-flash"),
+          model: google("gemini-3-flash-preview"),
           messages: [
             {
               role: "user",
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
           ],
         })
       : await generateText({
-          model: google("gemini-2.5-flash"),
+          model: google("gemini-3-flash-preview"),
           prompt: fullPrompt,
         });
 
