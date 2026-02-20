@@ -186,3 +186,121 @@ flowchart LR
 ## Related Documentation
 
 - Architecture: [`docs/ai-design-to-animation-pipeline.md`](./ai-design-to-animation-pipeline.md) — Full pipeline architecture (Steps 2-4 are most relevant)
+- Image-first pipeline: [`docs/image-to-ui-react-approaches.md`](./image-to-ui-react-approaches.md) — Alternative input mode using Gemini image gen
+
+---
+
+## Implementation Notes — V2: Dramatic Design Quality Improvement
+
+> Completed: 2026-02-19 | Branch: `master`
+> Commit: `5a9d7f4` — "feat: dramatic design quality improvement"
+> Plan: `~/.claude/plans/giggly-cooking-nebula.md`
+
+### Deviations from Plan
+
+Implementation followed the plan closely across all 5 steps. Key deviations:
+
+- **Two-stage generation pipeline added (not in original plan):** `generate-layout/route.ts` was refactored to a 2-stage flow: Stage 1 generates a detailed design spec (text-only via `buildDesignSpecPrompt()`), Stage 2 converts that spec to LayoutSpec JSON (via `buildLayoutJsonPrompt()`). The plan only called for prompt improvements, but this architectural change was necessary to give the LLM enough context to produce high-quality output.
+- **Component repair step added to generate-layout route:** During testing, `luxury` style layouts produced negative `zIndex` values that failed Zod validation. Added a pre-validation repair loop that clamps `zIndex >= 0`, coerces `fontWeight` strings to numbers, and filters invalid shadow objects. This wasn't in the plan but discovered during testing.
+- **Edit pipeline (`edit-layout/route.ts` + `apply-edits.ts`) created fresh:** The plan said "update repair in edit route" but the route didn't exist yet. Created from scratch with diff-based editing and full shadows/textTransform repair.
+- **Layout engine grid stayed at 4px but collision logic was more nuanced:** Added an `overlapArea()` helper that calculates actual pixel overlap area and only resolves when overlap exceeds 25% of the smaller component's area — preserving badges-on-cards and decorative overlaps.
+
+### Additional Decisions
+
+**Multi-shadow as array, keeping backward compat with single `shadow`:**
+Both `shadow` (single object) and `shadows` (array) coexist in the schema. The SVG mapper's `resolveShadow()` checks `shadows` first, falls back to `shadow`. This means existing layouts with single shadows continue to render.
+
+**Default 2-layer shadow on cards when none specified:**
+Cards with no shadow defined get a subtle ambient+key shadow pair: `[{0, 1, 3, rgba(0,0,0,0.08)}, {0, 4, 16, rgba(0,0,0,0.06)}]`. This eliminates the "flat card" problem without requiring the LLM to always specify shadows.
+
+**textTransform defaults to "uppercase" on badges:**
+The badge renderer applies uppercase by default even when the LLM doesn't specify `textTransform`, matching real-world badge conventions.
+
+### Key Files
+
+| File | Role |
+|------|------|
+| `app/lib/schemas.ts` | Added `shadows` array + `textTransform` enum to ComponentStyleSchema |
+| `app/lib/svg-mapper.ts` | 3 new helpers (`buildMultiShadowFilter`, `resolveShadow`, `applyTextTransform`), updated 7 renderers |
+| `app/lib/layout-engine.ts` | 4px grid (positions only), 25% overlap threshold, preserved z-index gaps |
+| `app/lib/prompt-builder.ts` | Design principles injection, 2-stage prompt builder, 5 detailed preset rewrites (~513 lines total) |
+| `app/api/generate-layout/route.ts` | 2-stage pipeline, component repair before Zod validation |
+| `app/api/edit-layout/route.ts` | New edit route with diff-based editing, shadows/textTransform repair |
+| `app/lib/apply-edits.ts` | New utility for applying component-level edits from LLM responses |
+
+### Testing
+
+Verified manually:
+1. **Corporate pricing page** — 3 cards with layered shadows, uppercase badges ("STARTER", "PROFESSIONAL", "ENTERPRISE"), proper typography hierarchy, generous spacing
+2. **Luxury hotel landing page** — Initially failed with negative `zIndex` Zod error → fixed with component repair step → then rendered 13 components with proper layering
+3. **Edit round-trip** — "make the heading larger" preserved all shadows and textTransform through the edit cycle
+
+### Known Limitations
+
+- **Previous limitation resolved:** "No multi-shadow support" from v1 is now solved with the `shadows` array
+- **gemini-3-pro-image-preview unavailable:** Consistently returns 503 (high demand). The model has reasoning capability that should produce even better layouts, but couldn't be tested
+- **textTransform not honored by all renderers:** Only `text`, `button`, `badge`, `avatar`, and `input-field` renderers apply it. `card` titles and `container` children don't inherit textTransform from parents
+- **Design principles are long:** The prompt is now ~500+ lines. This works well with Gemini 2.5 Flash but could hit token limits on smaller models
+
+### V2 Architecture
+
+```mermaid
+flowchart TD
+    subgraph "Two-Stage Generation (V2)"
+        P[User Prompt + Style] --> S1["Stage 1: buildDesignSpecPrompt()
+        Design principles + preset recipe"]
+        S1 --> G1["Gemini 2.5 Flash
+        (text-only)"]
+        G1 --> DS[Detailed Design Spec]
+        DS --> S2["Stage 2: buildLayoutJsonPrompt()
+        Spec + schema docs + shadows/textTransform"]
+        S2 --> G2["Gemini 2.5 Flash
+        (multimodal if images)"]
+        G2 --> JSON[Raw JSON]
+    end
+
+    subgraph "Repair Pipeline"
+        JSON --> EJ[extractJson — strip fences]
+        EJ --> JR[jsonrepair — fix malformed JSON]
+        JR --> CR["Component Repair
+        • zIndex ≥ 0
+        • fontWeight string→number
+        • filter invalid shadows"]
+        CR --> ZOD[Zod validation]
+    end
+
+    subgraph "Rendering"
+        ZOD --> LE["processLayout()
+        4px grid · 25% collision · z-index preserved"]
+        LE --> SVG["componentToSVG()
+        resolveShadow() · applyTextTransform()
+        buildMultiShadowFilter()"]
+        SVG --> Canvas[Fabric.js Canvas]
+    end
+```
+
+```mermaid
+flowchart LR
+    subgraph "Shadow Resolution"
+        S{Has shadows array?}
+        S -->|Yes| MSF["buildMultiShadowFilter()
+        Stack N feDropShadow elements"]
+        S -->|No| SS{Has single shadow?}
+        SS -->|Yes| BSF["buildShadowFilter()
+        Single feDropShadow"]
+        SS -->|No| DEF{Is card type?}
+        DEF -->|Yes| D["Default 2-layer shadow
+        ambient + key"]
+        DEF -->|No| NONE[No shadow]
+    end
+```
+
+### Resolved V1 Limitations
+
+| V1 Limitation | V2 Resolution |
+|---------------|---------------|
+| No multi-shadow | `shadows` array with `buildMultiShadowFilter()` stacking `<feDropShadow>` elements |
+| 8px grid too aggressive | 4px grid, positions only (sizes preserved as-is) |
+| Collision resolver breaks overlaps | 25% area threshold — small overlaps preserved |
+| z-index normalization flattens layers | Sort preserved but sequential renumbering removed |
+| Flat, dated-looking output | Design principles + composition patterns + 3-4x more detailed presets |

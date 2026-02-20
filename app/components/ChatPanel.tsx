@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import ColorPalettePicker from "./ColorPalettePicker";
-import type { Palette } from "@/app/lib/types";
+import type { Palette, GenerationMode } from "@/app/lib/types";
 
 interface Message {
   role: "user" | "system";
@@ -29,6 +29,7 @@ interface ChatPanelProps {
   error: string | null;
   palette: Palette;
   onPaletteChange: (p: Palette) => void;
+  generationMode?: GenerationMode;
 }
 
 const MAX_IMAGES = 5;
@@ -43,6 +44,7 @@ export default function ChatPanel({
   error,
   palette,
   onPaletteChange,
+  generationMode,
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -144,7 +146,13 @@ export default function ChatPanel({
       return;
     }
 
-    // Try clarification first
+    // Skip clarification for image-first mode
+    if (generationMode === "image-first") {
+      triggerGenerate(prompt);
+      return;
+    }
+
+    // Try clarification first (text-first mode only)
     setClarifyLoading(true);
     try {
       const questions = await onClarify(prompt);
@@ -319,7 +327,11 @@ export default function ChatPanel({
 
         {(loading || clarifyLoading) && (
           <div className="text-xs text-zinc-500 animate-pulse">
-            {clarifyLoading ? "Thinking..." : "Generating layout..."}
+            {clarifyLoading
+              ? "Thinking..."
+              : generationMode === "image-first"
+                ? "Generating UI mockup & extracting layout..."
+                : "Generating layout..."}
           </div>
         )}
         {error && (

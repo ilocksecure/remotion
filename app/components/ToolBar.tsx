@@ -1,6 +1,6 @@
 "use client";
 
-import type { LayoutSpec, DesignBrief } from "@/app/lib/types";
+import type { LayoutSpec, DesignBrief, GenerationMode } from "@/app/lib/types";
 
 type StylePreset = DesignBrief["style"];
 type DimensionPreset = { label: string; width: number; height: number };
@@ -11,6 +11,8 @@ interface ToolBarProps {
   dimensions: DimensionPreset;
   dimensionPresets: DimensionPreset[];
   onDimensionsChange: (d: DimensionPreset) => void;
+  generationMode: GenerationMode;
+  onGenerationModeChange: (m: GenerationMode) => void;
   layout: LayoutSpec | null;
   onExport?: () => void;
 }
@@ -23,12 +25,19 @@ const STYLES: StylePreset[] = [
   "tech",
 ];
 
+const MODES: { value: GenerationMode; label: string }[] = [
+  { value: "text-first", label: "Text-first" },
+  { value: "image-first", label: "Image-first" },
+];
+
 export default function ToolBar({
   style,
   onStyleChange,
   dimensions,
   dimensionPresets,
   onDimensionsChange,
+  generationMode,
+  onGenerationModeChange,
   layout,
   onExport,
 }: ToolBarProps) {
@@ -37,6 +46,24 @@ export default function ToolBar({
       <span className="font-semibold text-white">Design Studio</span>
 
       <div className="h-4 w-px bg-zinc-600" />
+
+      {/* Generation Mode */}
+      <label className="flex items-center gap-1.5 text-zinc-400">
+        Mode:
+        <select
+          value={generationMode}
+          onChange={(e) =>
+            onGenerationModeChange(e.target.value as GenerationMode)
+          }
+          className="bg-zinc-700 text-white px-2 py-1 rounded text-xs border border-zinc-600"
+        >
+          {MODES.map((m) => (
+            <option key={m.value} value={m.value}>
+              {m.label}
+            </option>
+          ))}
+        </select>
+      </label>
 
       {/* Style Preset */}
       <label className="flex items-center gap-1.5 text-zinc-400">

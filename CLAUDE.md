@@ -40,8 +40,10 @@ User prompt → /api/clarify (Gemini 2.5 Flash — optional clarifying questions
 - `app/lib/prompt-builder.ts` — `buildDesignPrompt()` constructs the LLM system prompt with style-specific instructions for 5 presets (minimal, corporate, playful, luxury, tech)
 - `app/api/clarify/route.ts` — POST handler: generates 2-3 clarifying questions via Gemini before layout generation
 - `app/api/generate-layout/route.ts` — POST handler: validates brief, calls Gemini (multimodal when images attached), repairs JSON via `jsonrepair`, validates with Zod
-- `app/lib/layout-engine.ts` — `processLayout()`: boundary clamping, 8px grid snap, collision resolution, z-index normalization
+- `app/lib/layout-engine.ts` — `processLayout()`: boundary clamping, 4px grid snap (positions only), threshold-based collision resolution (25% overlap), z-index sort
 - `app/lib/svg-mapper.ts` — `componentToSVG()`: renders 11 component types to SVG strings with gradient/shadow support
+- `app/api/edit-layout/route.ts` — POST handler: diff-based layout editing via Gemini, repairs shadows/textTransform in response
+- `app/lib/apply-edits.ts` — Utility for applying component-level edits from LLM edit responses
 
 **Editor UI:**
 - `app/editor/page.tsx` — Main editor page, manages all state (layout, palette, style, dimensions)
@@ -62,7 +64,7 @@ The `ComponentSpecSchema` supports 11 types: `text`, `shape`, `icon`, `image-pla
 
 ### Style Properties
 
-`ComponentStyleSchema` supports: `fill`, `stroke`, `strokeWidth`, `borderRadius`, `opacity`, `fontFamily`, `fontSize`, `fontWeight`, `textAlign`, `color`, `letterSpacing`, `lineHeight`, `gradient` (angle + color stops), `shadow` (x/y/blur/color). The SVG mapper converts `gradient` to `<linearGradient>` defs and `shadow` to `<filter>` elements.
+`ComponentStyleSchema` supports: `fill`, `stroke`, `strokeWidth`, `borderRadius`, `opacity`, `fontFamily`, `fontSize`, `fontWeight`, `textAlign`, `color`, `letterSpacing`, `lineHeight`, `gradient` (angle + color stops), `shadow` (single x/y/blur/color), `shadows` (array of x/y/blur/color for layered depth), `textTransform` (uppercase/lowercase/capitalize/none). The SVG mapper converts `gradient` to `<linearGradient>` defs, `shadow`/`shadows` to `<filter>` elements with stacked `<feDropShadow>`, and applies `textTransform` to text content.
 
 ## Important Patterns
 
@@ -70,7 +72,8 @@ The `ComponentSpecSchema` supports 11 types: `text`, `shape`, `icon`, `image-pla
 - **All validation happens through Zod schemas.** `schemas.ts` is the single source of truth. Types in `types.ts` are derived via `z.infer<>`.
 - **The API route uses `jsonrepair`** to fix malformed LLM JSON (trailing commas, unescaped characters, comments) before parsing. Markdown fences are stripped first via `extractJson()`.
 - **Fabric.js v6** uses async patterns: `dispose()` returns a Promise, `loadSVGFromString()` returns a Promise. The canvas lazy-loads the fabric module.
-- **`processLayout()`** always runs after LLM generation — it clamps to canvas bounds, snaps to 8px grid, resolves collisions, and normalizes z-indices.
+- **`processLayout()`** always runs after LLM generation — it clamps to canvas bounds, snaps positions to 4px grid (preserving sizes), resolves collisions only when overlap exceeds 25% of the smaller component, and sorts by z-index.
+- **Two-stage generation pipeline:** `/api/generate-layout` runs two LLM calls: (1) `buildDesignSpecPrompt()` generates a detailed design spec (text-only), (2) `buildLayoutJsonPrompt()` converts that spec to LayoutSpec JSON. This gives the LLM enough context to produce high-quality layouts.
 - **Multimodal Gemini support:** When reference images are uploaded, `/api/generate-layout` switches from `prompt` to `messages` with `type: "image"` parts. Text-only is used when no images are present for efficiency.
 
 ## Tech Stack
@@ -92,3 +95,4 @@ The `ComponentSpecSchema` supports 11 types: `text`, `shape`, `icon`, `image-pla
 - `docs/remotion-learnings.md` — Remotion API patterns (spring, interpolate, TransitionSeries)
 - `docs/gemini-api-reference.md` — Gemini API endpoints for image gen and TTS
 - `docs/enhanced-chat-panel-implementation.md` — ChatPanel UX upgrade: textarea, image upload, AI clarifying questions
+- `docs/image-to-ui-react-approaches.md` — Image-to-UI approaches research + image-first pipeline POC results

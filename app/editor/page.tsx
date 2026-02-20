@@ -8,7 +8,7 @@ import type { ClarifyQuestion } from "@/app/components/ChatPanel";
 import LayerPanel from "@/app/components/LayerPanel";
 import ToolBar from "@/app/components/ToolBar";
 import ExportDialog from "@/app/components/ExportDialog";
-import type { LayoutSpec, DesignBrief, EditResponse } from "@/app/lib/types";
+import type { LayoutSpec, DesignBrief, EditResponse, GenerationMode } from "@/app/lib/types";
 import { processLayout } from "@/app/lib/layout-engine";
 import { applyEdits } from "@/app/lib/apply-edits";
 
@@ -39,6 +39,7 @@ export default function EditorPage() {
   const [palette, setPalette] = useState(DEFAULT_PALETTE);
   const [error, setError] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const [generationMode, setGenerationMode] = useState<GenerationMode>("text-first");
   const fabricCanvasRef = useRef<Canvas | null>(null);
 
   async function handleGenerate(
@@ -58,7 +59,12 @@ export default function EditorPage() {
         targetFormat: "web",
       };
 
-      const res = await fetch("/api/generate-layout", {
+      const endpoint =
+        generationMode === "image-first"
+          ? "/api/generate-layout-image"
+          : "/api/generate-layout";
+
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(brief),
@@ -147,6 +153,8 @@ export default function EditorPage() {
         dimensions={dimensions}
         dimensionPresets={DIMENSION_PRESETS}
         onDimensionsChange={setDimensions}
+        generationMode={generationMode}
+        onGenerationModeChange={setGenerationMode}
         layout={layout}
         onExport={() => setExportOpen(true)}
       />
@@ -163,6 +171,7 @@ export default function EditorPage() {
             error={error}
             palette={palette}
             onPaletteChange={setPalette}
+            generationMode={generationMode}
           />
         </div>
 
